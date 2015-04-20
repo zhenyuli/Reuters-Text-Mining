@@ -1,0 +1,236 @@
+
+R version 3.1.3 (2015-03-09) -- "Smooth Sidewalk"
+Copyright (C) 2015 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> library(mclust);
+Package 'mclust' version 5.0.0
+Type 'citation("mclust")' for citing this R package in publications.
+> library(topicmodels);
+> library(fpc);
+> library(cluster);
+> 
+> # Function to find scatter of a group of points
+> # input D	matrix of data points (columns are dimensions)
+> scatter<-function(D){
++ 	# Find Cluster Mean
++ 	center<-apply(D,2,mean);
++ 	# Subtract data point from center
++ 	D<-sweep(D,MARGIN=2,center,FUN="-");
++ 	# Find scatter matrix
++ 	S<-t(D)%*%D;
++ 	# Find scatter
++ 	scat<-sum(diag(S));
++ 
++ 	return(scat);
++ }
+> measure_scatter<-function(D,clusters){
++ 	# Tabulate all clusters
++ 	freq_tab<-table(clusters);
++ 	# Find cluster labels
++ 	cluster_labs<-as.numeric(names(freq_tab));
++ 	# Find center of all points
++ 	center<-apply(D,2,mean);
++ 	# Find Scatter of all clusters
++ 	tot_S<-0; # Within Cluster Scatter
++ 	tot_B<-0; # Between Cluster Scatter
++ 	for (i in cluster_labs){
++ 		Di<-D[clusters == i,];
++ 		center_i<-apply(Di,2,mean);
++ 		Si<-scatter(Di); # Within Cluster Scatter
++ 		Bi<-dim(Di)[1] * sum((center_i-center)^2); # Between Cluster Scatter
++ 		tot_S<-tot_S+Si;
++ 		tot_B<-tot_B+Bi;
++ 		print(sprintf('Cluster %d Between-Cluster Scatter: %f Within-Cluster Scatter:%f',
++ 			i,Bi,Si));
++ 	}
++ 	print(sprintf('Before Cluster Scatter:%f',scatter(D)));
++ 	print(sprintf('Total Between-Cluster Scatter:%f',tot_B));
++ 	print(sprintf('Total Within-Cluster Scatter:%f',tot_S));
++ }
+> 
+> majority_vote<-function(class,cluster){
++ 	# Build frequency table
++ 	cluster_tab<-table(cluster);
++ 	# Loop over all cluster tags
++ 	for(i in 1:length(cluster_tab)){
++ 		# Find class labels belong to cluster i
++ 		subclass<-class[cluster == i];
++ 		# Build frequency table
++ 		subclass_tab<-table(subclass);
++ 		# Find majority class label of the cluster
++ 		majority<-subclass_tab == max(subclass_tab);
++ 		# Output Majority
++ 		print(sprintf('Majority of Cluster %d [%d/%d] ---> Class %s [%d/%d]',
++ 			i,cluster_tab[i],length(class),
++ 			names(subclass_tab)[majority],subclass_tab[majority],sum(subclass_tab)));
++ 	}
++ }
+> 
+> args <- commandArgs(trailingOnly=T);
+> if(length(args) < 1){
++ 	print('Usage: ./clustering.R cluster_method options');
++ 	print('Cluster Methods: kmeans,hclust[optional:single|average|complete],dbscan[optional:epsilon(0-1)],mclust');
++ }
+> stopifnot(length(args)>0);
+> 
+> 
+> #Prepare Data
+> load('./data/dtm.Rdata');
+> data<-dtm;
+> data<-scale(data);
+> 
+> doc_tags<-read.csv('./data/doc_tags.csv',header=T);
+> class<-doc_tags$tags;
+> 
+> cluster<-NULL;
+> 
+> if(args[1] == 'kmeans'){
++ 	# K-Means Clustering
++ 	print('Performing K-Means Clustering')
++ 	k_means_fit<-kmeans(data,10);
++ 	cluster<-k_means_fit$cluster;
++ 	save(k_means_fit,file='./data/k_means_fit.Rdata')
++ 	
++ 	# Build Silhouette
++ 	k_means_si<-silhouette(cluster,dist(data,'euclidean'));
++ 	save(k_means_si,file='./data/k_means_si.Rdata');
++ }
+> if(args[1] == 'hclust'){
++ 	# Hierarchical Clustering
++ 	method<-'single';
++ 	if(length(args) > 1) method <- args[2];
++ 
++ 	print('./Performing Hierarchical Clustering');
++ 	print(sprintf('hclust method: %s',method));
++ 
++ 	distance<-dist(data,'euclidean');
++ 	hclust_fit<-hclust(distance,method=method);
++ 	cluster<-hclust_fit$cluster;
++ 	save(hclust_fit,file='./data/hclust_fit.Rdata');
++ 
++ 	#Build Silhouette
++ 	hclust_si<-silhouette(cluster,distance);
++ 	save(hclust_si,file='./data/hclust_si.Rdata');
++ }
+> if(args[1] == 'dbscan'){
++ 	eps<-0.5;
++ 	if(length(args) > 1) eps <- as.numeric(args[2]);
++ 	# DBSCAN Clustering
++ 	print('Performning DBSCAN Clustering')
++ 	dbscan_fit<-dbscan(data,eps);
++ 	cluster<-dbscan_fit$cluster;
++ 	save(dbscan_fit,file='./data/dbscan_fit.Rdata')
++ 
++ 	# Build Silhouette
++ 	dbscan_si<-silhouette(cluster,dist(data,'euclidean'));
++ 	save(dbscan_si,file='./data/dbscan_si.Rdata');
++ }
+[1] "Performning DBSCAN Clustering"
+> if(args[1] == 'mclust'){
++ 	# EM Clustering
++ 	print('Performing EM Clustering')
++ 	mclust_fit<-Mclust(data,10);
++ 	cluster<-mclust_fit$classification;
++ 	save(mclust_fit,file='./data/mclust_fit.Rdata')
++ 
++ 	# Build Silhouette
++ 	mclust_si<-silhouette(cluster,dist(data,'euclidean'));
++ 	save(mclust_si,file='./data/mclust_si.Rdata');
++ }
+> #Measure Scatter
+> measure_scatter(data,cluster);
+[1] "Cluster 0 Between-Cluster Scatter: 1101.108269 Within-Cluster Scatter:1871528.844893"
+[1] "Cluster 1 Between-Cluster Scatter: 12507.842806 Within-Cluster Scatter:6.233162"
+[1] "Cluster 2 Between-Cluster Scatter: 2003.724254 Within-Cluster Scatter:0.981196"
+[1] "Cluster 3 Between-Cluster Scatter: 2143.265313 Within-Cluster Scatter:0.395804"
+[1] "Cluster 4 Between-Cluster Scatter: 327.046760 Within-Cluster Scatter:0.227530"
+[1] "Cluster 5 Between-Cluster Scatter: 1382.169659 Within-Cluster Scatter:2.372020"
+[1] "Cluster 6 Between-Cluster Scatter: 281.729617 Within-Cluster Scatter:0.216550"
+[1] "Cluster 7 Between-Cluster Scatter: 394.829181 Within-Cluster Scatter:0.092294"
+[1] "Cluster 8 Between-Cluster Scatter: 1047.031298 Within-Cluster Scatter:4.893926"
+[1] "Cluster 9 Between-Cluster Scatter: 478.550278 Within-Cluster Scatter:1.279317"
+[1] "Cluster 10 Between-Cluster Scatter: 357.293052 Within-Cluster Scatter:0.000000"
+[1] "Cluster 11 Between-Cluster Scatter: 570.965352 Within-Cluster Scatter:0.000000"
+[1] "Cluster 12 Between-Cluster Scatter: 351.535832 Within-Cluster Scatter:0.465214"
+[1] "Cluster 13 Between-Cluster Scatter: 283.146983 Within-Cluster Scatter:0.000000"
+[1] "Cluster 14 Between-Cluster Scatter: 593.030102 Within-Cluster Scatter:0.173062"
+[1] "Cluster 15 Between-Cluster Scatter: 354.337024 Within-Cluster Scatter:0.389767"
+[1] "Cluster 16 Between-Cluster Scatter: 645.858900 Within-Cluster Scatter:0.000000"
+[1] "Cluster 17 Between-Cluster Scatter: 351.380883 Within-Cluster Scatter:0.047874"
+[1] "Cluster 18 Between-Cluster Scatter: 156.711574 Within-Cluster Scatter:0.227486"
+[1] "Cluster 19 Between-Cluster Scatter: 528.333388 Within-Cluster Scatter:0.440294"
+[1] "Cluster 20 Between-Cluster Scatter: 365.903593 Within-Cluster Scatter:0.092304"
+[1] "Cluster 21 Between-Cluster Scatter: 155.311338 Within-Cluster Scatter:0.000000"
+[1] "Cluster 22 Between-Cluster Scatter: 208.351006 Within-Cluster Scatter:0.000000"
+[1] "Cluster 23 Between-Cluster Scatter: 391.906531 Within-Cluster Scatter:1.048107"
+[1] "Cluster 24 Between-Cluster Scatter: 243.244993 Within-Cluster Scatter:0.044291"
+[1] "Cluster 25 Between-Cluster Scatter: 135.864602 Within-Cluster Scatter:0.050877"
+[1] "Cluster 26 Between-Cluster Scatter: 426.170596 Within-Cluster Scatter:0.080034"
+[1] "Cluster 27 Between-Cluster Scatter: 182.036543 Within-Cluster Scatter:0.080242"
+[1] "Cluster 28 Between-Cluster Scatter: 109.850726 Within-Cluster Scatter:0.000000"
+[1] "Cluster 29 Between-Cluster Scatter: 243.994652 Within-Cluster Scatter:0.086526"
+[1] "Cluster 30 Between-Cluster Scatter: 154.819572 Within-Cluster Scatter:0.000000"
+[1] "Cluster 31 Between-Cluster Scatter: 370.230636 Within-Cluster Scatter:0.000000"
+[1] "Cluster 32 Between-Cluster Scatter: 2803.661919 Within-Cluster Scatter:0.000000"
+[1] "Before Cluster Scatter:1903200.000000"
+[1] "Total Between-Cluster Scatter:31651.237230"
+[1] "Total Within-Cluster Scatter:1871548.762770"
+> # Find Majority Class of Each Cluster
+> majority_vote(class,cluster);
+[1] "Majority of Cluster 1 [8901/9517] ---> Class 37 [212/212]"
+[1] "Majority of Cluster 2 [212/9517] ---> Class 37 [39/39]"
+[1] "Majority of Cluster 3 [39/9517] ---> Class 37 [33/33]"
+[1] "Majority of Cluster 4 [33/9517] ---> Class 37 [9/9]"
+[1] "Majority of Cluster 5 [9/9517] ---> Class 37 [35/35]"
+[1] "Majority of Cluster 6 [35/9517] ---> Class 37 [7/7]"
+[1] "Majority of Cluster 7 [7/9517] ---> Class 37 [9/9]"
+[1] "Majority of Cluster 8 [9/9517] ---> Class 37 [54/54]"
+[1] "Majority of Cluster 9 [54/9517] ---> Class 37 [17/17]"
+[1] "Majority of Cluster 10 [17/9517] ---> Class 37 [8/8]"
+[1] "Majority of Cluster 11 [8/9517] ---> Class 37 [13/13]"
+[1] "Majority of Cluster 12 [13/9517] ---> Class 37 [11/11]"
+[1] "Majority of Cluster 13 [11/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 14 [5/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 15 [5/9517] ---> Class 37 [19/19]"
+[1] "Majority of Cluster 16 [19/9517] ---> Class 37 [11/11]"
+[1] "Majority of Cluster 17 [11/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 18 [5/9517] ---> Class 37 [8/8]"
+[1] "Majority of Cluster 19 [8/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 20 [5/9517] ---> Class 37 [13/13]"
+[1] "Majority of Cluster 21 [13/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 22 [5/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 23 [5/9517] ---> Class 37 [13/13]"
+[1] "Majority of Cluster 24 [13/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 25 [5/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 26 [5/9517] ---> Class 37 [12/12]"
+[1] "Majority of Cluster 27 [12/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 28 [5/9517] ---> Class 37 [6/6]"
+[1] "Majority of Cluster 29 [6/9517] ---> Class 37 [6/6]"
+[1] "Majority of Cluster 30 [6/9517] ---> Class 37 [5/5]"
+[1] "Majority of Cluster 31 [5/9517] ---> Class 47 [5/10]" 
+[2] "Majority of Cluster 31 [5/9517] ---> Class 110 [5/10]"
+[1] "Majority of Cluster 32 [10/9517] ---> Class 57 [11/21]"
+character(0)
+Warning message:
+In max(subclass_tab) : no non-missing arguments to max; returning -Inf
+> 
+> proc.time()
+    user   system  elapsed 
+1299.827   80.213 1392.437 

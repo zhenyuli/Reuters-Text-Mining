@@ -1,0 +1,187 @@
+
+R version 3.1.3 (2015-03-09) -- "Smooth Sidewalk"
+Copyright (C) 2015 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> library(mclust);
+Package 'mclust' version 5.0.0
+Type 'citation("mclust")' for citing this R package in publications.
+> library(topicmodels);
+> library(fpc);
+> library(cluster);
+> 
+> # Function to find scatter of a group of points
+> # input D	matrix of data points (columns are dimensions)
+> scatter<-function(D){
++ 	# Find Cluster Mean
++ 	center<-apply(D,2,mean);
++ 	# Subtract data point from center
++ 	D<-sweep(D,MARGIN=2,center,FUN="-");
++ 	# Find scatter matrix
++ 	S<-t(D)%*%D;
++ 	# Find scatter
++ 	scat<-sum(diag(S));
++ 
++ 	return(scat);
++ }
+> measure_scatter<-function(D,clusters){
++ 	# Tabulate all clusters
++ 	freq_tab<-table(clusters);
++ 	# Find cluster labels
++ 	cluster_labs<-as.numeric(names(freq_tab));
++ 	# Find center of all points
++ 	center<-apply(D,2,mean);
++ 	# Find Scatter of all clusters
++ 	tot_S<-0; # Within Cluster Scatter
++ 	tot_B<-0; # Between Cluster Scatter
++ 	for (i in cluster_labs){
++ 		Di<-D[clusters == i,];
++ 		center_i<-apply(Di,2,mean);
++ 		Si<-scatter(Di); # Within Cluster Scatter
++ 		Bi<-dim(Di)[1] * sum((center_i-center)^2); # Between Cluster Scatter
++ 		tot_S<-tot_S+Si;
++ 		tot_B<-tot_B+Bi;
++ 		print(sprintf('Cluster %d Between-Cluster Scatter: %f Within-Cluster Scatter:%f',
++ 			i,Bi,Si));
++ 	}
++ 	print(sprintf('Before Cluster Scatter:%f',scatter(D)));
++ 	print(sprintf('Total Between-Cluster Scatter:%f',tot_B));
++ 	print(sprintf('Total Within-Cluster Scatter:%f',tot_S));
++ }
+> 
+> majority_vote<-function(class,cluster){
++ 	# Build frequency table
++ 	cluster_tab<-table(cluster);
++ 	# Loop over all cluster tags
++ 	for(i in 1:length(cluster_tab)){
++ 		# Find class labels belong to cluster i
++ 		subclass<-class[cluster == i];
++ 		# Build frequency table
++ 		subclass_tab<-table(subclass);
++ 		# Find majority class label of the cluster
++ 		majority<-subclass_tab == max(subclass_tab);
++ 		# Output Majority
++ 		print(sprintf('Majority of Cluster %d [%d/%d] ---> Class %s [%d/%d]',
++ 			i,cluster_tab[i],length(class),
++ 			names(subclass_tab)[majority],subclass_tab[majority],sum(subclass_tab)));
++ 	}
++ }
+> 
+> args <- commandArgs(trailingOnly=T);
+> if(length(args) < 1){
++ 	print('Usage: ./clustering.R cluster_method options');
++ 	print('Cluster Methods: pam,hclust[optional:single|average|complete],dbscan[optional:epsilon(0-1)],mclust');
++ }
+> stopifnot(length(args)>0);
+> 
+> 
+> #Prepare Data
+> load('./data/dtm.Rdata');
+> data<-dtm;
+> data<-scale(data);
+> 
+> doc_tags<-read.csv('./data/doc_tags.csv',header=T);
+> class<-doc_tags$tags;
+> 
+> cluster<-NULL;
+> 
+> if(args[1] == 'pam'){
++ 	# K-Means Clustering
++ 	print('Performing PAM Clustering')
++ 	pam_fit<-pam(data,10);
++ 	cluster<-pam_fit$cluster;
++ 	save(pam_fit,file='./data/pam_fit.Rdata')
++ 	
++ 	# Build Silhouette
++ 	pam_si<-silhouette(cluster,dist(data,'euclidean'));
++ 	save(pam_si,file='./data/pam_si.Rdata');
++ }
+[1] "Performing PAM Clustering"
+> if(args[1] == 'hclust'){
++ 	# Hierarchical Clustering
++ 	method<-'single';
++ 	if(length(args) > 1) method <- args[2];
++ 
++ 	print('./Performing Hierarchical Clustering');
++ 	print(sprintf('hclust method: %s',method));
++ 
++ 	distance<-dist(data,'euclidean');
++ 	hclust_fit<-hclust(distance,method=method);
++ 	cluster<-hclust_fit$cluster;
++ 	save(hclust_fit,file='./data/hclust_fit.Rdata');
++ 
++ 	#Build Silhouette
++ 	hclust_si<-silhouette(cluster,distance);
++ 	save(hclust_si,file='./data/hclust_si.Rdata');
++ }
+> if(args[1] == 'dbscan'){
++ 	eps<-0.5;
++ 	if(length(args) > 1) eps <- as.numeric(args[2]);
++ 	# DBSCAN Clustering
++ 	print('Performning DBSCAN Clustering')
++ 	dbscan_fit<-dbscan(data,eps);
++ 	cluster<-dbscan_fit$cluster;
++ 	save(dbscan_fit,file='./data/dbscan_fit.Rdata')
++ 
++ 	# Build Silhouette
++ 	dbscan_si<-silhouette(cluster,dist(data,'euclidean'));
++ 	save(dbscan_si,file='./data/dbscan_si.Rdata');
++ }
+> if(args[1] == 'mclust'){
++ 	# EM Clustering
++ 	print('Performing EM Clustering')
++ 	mclust_fit<-Mclust(data,10);
++ 	cluster<-mclust_fit$classification;
++ 	save(mclust_fit,file='./data/mclust_fit.Rdata')
++ 
++ 	# Build Silhouette
++ 	mclust_si<-silhouette(cluster,dist(data,'euclidean'));
++ 	save(mclust_si,file='./data/mclust_si.Rdata');
++ }
+> #Measure Scatter
+> measure_scatter(data,cluster);
+[1] "Cluster 1 Between-Cluster Scatter: 15581.431412 Within-Cluster Scatter:446801.791183"
+[1] "Cluster 2 Between-Cluster Scatter: 48543.515879 Within-Cluster Scatter:480950.617903"
+[1] "Cluster 3 Between-Cluster Scatter: 17332.573523 Within-Cluster Scatter:35324.236485"
+[1] "Cluster 4 Between-Cluster Scatter: 110869.507542 Within-Cluster Scatter:354601.320611"
+[1] "Cluster 5 Between-Cluster Scatter: 18153.165912 Within-Cluster Scatter:31383.594861"
+[1] "Cluster 6 Between-Cluster Scatter: 22314.322333 Within-Cluster Scatter:47554.651109"
+[1] "Cluster 7 Between-Cluster Scatter: 41694.418125 Within-Cluster Scatter:61462.254766"
+[1] "Cluster 8 Between-Cluster Scatter: 14983.100237 Within-Cluster Scatter:31549.563724"
+[1] "Cluster 9 Between-Cluster Scatter: 56613.335045 Within-Cluster Scatter:31373.677652"
+[1] "Cluster 10 Between-Cluster Scatter: 25274.798735 Within-Cluster Scatter:10838.122962"
+[1] "Before Cluster Scatter:1903200.000000"
+[1] "Total Between-Cluster Scatter:371360.168743"
+[1] "Total Within-Cluster Scatter:1531839.831257"
+> # Find Majority Class of Each Cluster
+> majority_vote(class,cluster);
+[1] "Majority of Cluster 1 [4325/9517] ---> Class 2 [1612/4325]"
+[1] "Majority of Cluster 2 [1173/9517] ---> Class 2 [304/1173]"
+[1] "Majority of Cluster 3 [300/9517] ---> Class 2 [271/300]"
+[1] "Majority of Cluster 4 [396/9517] ---> Class 128 [123/396]"
+[1] "Majority of Cluster 5 [140/9517] ---> Class 57 [69/140]"
+[1] "Majority of Cluster 6 [1383/9517] ---> Class 37 [1317/1383]"
+[1] "Majority of Cluster 7 [550/9517] ---> Class 37 [533/550]"
+[1] "Majority of Cluster 8 [194/9517] ---> Class 75 [108/194]"
+[1] "Majority of Cluster 9 [563/9517] ---> Class 37 [560/563]"
+[1] "Majority of Cluster 10 [493/9517] ---> Class 37 [491/493]"
+> 
+> proc.time()
+   user  system elapsed 
+650.402   3.389 662.944 

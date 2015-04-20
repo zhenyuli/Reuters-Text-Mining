@@ -1,0 +1,315 @@
+
+R version 3.1.3 (2015-03-09) -- "Smooth Sidewalk"
+Copyright (C) 2015 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> library(e1071);
+> library(randomForest);
+randomForest 4.6-10
+Type rfNews() to see new features/changes/bug fixes.
+> library(topicmodels);
+> #Normalize features of dataset
+> normalize<-function(data){
++ 	cols<-ncol(data);
++ 	for(i in 1:cols){
++ 		if(is.numeric(data[,i]))data[,i]<-data[,i]/sum(data[,i]);
++ 	}
++ 	return(data);
++ }
+> #Randomize the rows of dataset
+> randomize<-function(data){
++ 	length<-nrow(data);
++ 	indices<-1:length;
++ 	rindices<-sample(indices,length,replace=F);
++ 	data<-data[rindices,];
++ 	return(data);
++ }
+> #This function does cross-validation
+> #input data	datamatrix
+> #input method	randomForest,SVM,naiveBayes,etc
+> #input K	K-foldvalidation
+> #return		confusion matrices of each fold
+> cross_validation<-function(data,method,K=10){
++ 	#Calculate matrix length and size
++ 	length<-nrow(data);
++ 	partitionSize<-floor(length/K);
++ 	#Confusion Matrix
++ 	confusionMatrices<-list();
++ 	#List of models
++ 	models<-list()
++ 	#Normalize Data
++ 	data<-normalize(data);
++ 	#Shuffle Data
++ 	randomData<-randomize(data);
++ 	#Perform Cross-Validation
++ 	for(k in 1:K){
++ 		# Debug
++ 		print(sprintf('K-Fold: %d',k));
++ 		#Get Traning Set
++ 		startIdx<-(k-1)*partitionSize+1;
++ 		indices<-startIdx:(startIdx+partitionSize-1);
++ 		trainset<-randomData[-indices,];
++ 		testset<-randomData[indices,];
++ 		#Train Data
++ 		ifelse(method=='svm',
++ 			model<-svm(class~.,data=trainset,kernel=svm.kernel,
++ 				gamma=svm.gamma,cost=svm.cost),
++ 			ifelse(method=='naiveBayes',
++ 				model<-naiveBayes(class~.,data=trainset),
++ 				model<-randomForest(class~.,data=trainset,mtry=rf.mtry)
++ 		));
++ 		prediction<-predict(model,testset);
++ 		#Construct Confusion Matrix
++ 		tab<-table(actual=testset[,1],predicted=prediction);
++ 		confusionMatrices[[k]]<-tab;
++ 		models[[k]]<-model;
++ 	}
++ 	return(list(confusionMatrices=confusionMatrices,models=models));
++ }
+> #This function produce per class performance matrix from confusion matrix
+> #input matrix confusionmatrix
+> measure_performance<-function(mat){
++ 	#Get Size of Matrix
++ 	size<-nrow(mat);
++ 	#Initialize Result
++ 	result<-matrix(,nrow=size,ncol=6);
++ 	col_names<-c('TP','FN','FP','Recall','Precision','F-measure');
++ 	row_names<-rownames(mat);
++ 	colnames(result)<-col_names;
++ 	rownames(result)<-row_names;
++ 	#Iterate over all class
++ 	for(c in 1:size){
++ 	#Calculate Performance Metrics
++ 		TP<-mat[c,c];
++ 		FN<-sum(mat[c,-c]);
++ 		FP<-sum(mat[-c,c]);
++ 		recall<-TP/(TP+FN);
++ 		precision<-TP/(TP+FP);
++ 		fmeasure<-(2*precision*recall)/(precision+recall);
++ 		#SaveToResult
++ 		result[c,1]<-TP;result[c,2]<-FN;result[c,3]<-FP;
++ 		result[c,4]<-recall;result[c,5]<-precision;
++ 		result[c,6]<-fmeasure;
++ 	}
++ 	return(result);
++ }
+> #This function produce the overall performance matrix
+> #input matrix per class performance matrix
+> #return over all performance matrix
+> get_overall_performance<-function(mat){
++ 	result<-matrix(0,nrow=2,ncol=3);
++ 	col_names<-c('Recall','Precision','F-measure');
++ 	row_names<-c('micro-avg','macro-avg');
++ 	colnames(result)<-col_names;
++ 	rownames(result)<-row_names;
++ 	#Micro Averaging
++ 	TP<-sum(mat[,1]);
++ 	FN<-sum(mat[,2]);
++ 	FP<-sum(mat[,3]);
++ 	result[1,1]<-TP/(TP+FN);
++ 	result[1,2]<-TP/(TP+FP);
++ 	result[1,3]<-2*result[1,2]*result[1,1]/(result[1,1]+result[1,2]);
++ 	#Macro Averaging
++ 	result[2,1]<-mean(mat[,4],na.rm=T);
++ 	result[2,2]<-mean(mat[,5],na.rm=T);
++ 	result[2,3]<-mean(mat[,6],na.rm=T);
++ 	return(result);
++ }
+> # Fetch Command Line Arguments
+> args <- commandArgs(trailingOnly=T)
+> ifelse(length(args) > 1, method<-args[1], method<-'naiveBayes')
+[1] "svm"
+> print(sprintf("Method: %s",method))
+[1] "Method: svm"
+> if(method == 'svm'){
++ 	if(length(args) == 4){
++ 		svm.kernel = args[2]
++ 		svm.gamma = as.numeric(args[3])
++ 		svm.cost = as.numeric(args[4])
++ 	}
++ 	else{
++ 		svm.kernel='radial'
++ 		svm.gamma = 0.01
++ 		svm.cost = 10000
++ 	}
++ 	print(sprintf("Settings: Kernel:%s Gamma:%f Cost:%f",
++ 		svm.kernel,svm.gamma,svm.cost))
++ }
+[1] "Settings: Kernel:linear Gamma:100.000000 Cost:0.010000"
+> if(method == 'randomForest'){
++ 	if(length(args) == 2){
++ 		rf.mtry = as.numeric(args[2])
++ 	}
++ 	else{
++ 		rf.mtry = 4
++ 	}
++ 	print(sprintf("Settings: mtry:%f",rf.mtry))
++ }
+> 
+> #Prepare Data
+> data<-read.csv('./doc_tags.csv',header=T);
+> load('./lda.Rdata');
+> load('./dtm.Rdata');
+> 
+> print('Preparing Data.')
+[1] "Preparing Data."
+> # Add prefix to feature names
+> colnames(dtm)<-paste0('feature.',colnames(dtm))
+> # Convert topic models to strings
+> doc.topics<-sapply(topics(lda),as.character);
+> 
+> # Extract the purpose and tags column
+> data<-data[,colnames(data) %in% c('purpose','tags')];
+> # Combine Tags with features
+> data<-cbind(data,doc.topics,dtm);
+> 
+> # Preparing class column
+> colnames(data)[2]<-'class'; # Replace Class Name
+> data$class<-sapply(data$class,as.character); # Convert to characters
+> data$class<-factor(data$class); # Factorize class
+> 
+> # Convert to data frame
+> data<-as.data.frame(data);
+> 
+> #Separate Training and Testing Set
+> train_set<-subset(data,purpose == 'train'); # Get Training Set
+> test_set<-subset(data,purpose == 'test'); # Get Training Set
+> train_set<-train_set[,2:dim(data)[2]]; # Remove Purpose Column
+> test_set<-test_set[,2:dim(data)[2]]; # Remove Purpose Column
+> #Do cross validation
+> K<-10;
+> print(sprintf('Starting %d-fold cross validation',K));
+[1] "Starting 10-fold cross validation"
+> result<-cross_validation(train_set,method,K=K);
+[1] "K-Fold: 1"
+[1] "K-Fold: 2"
+[1] "K-Fold: 3"
+[1] "K-Fold: 4"
+[1] "K-Fold: 5"
+[1] "K-Fold: 6"
+[1] "K-Fold: 7"
+[1] "K-Fold: 8"
+[1] "K-Fold: 9"
+[1] "K-Fold: 10"
+> confusionMatrices<-result$confusionMatrices;
+> models<-result$models;
+> 
+> #Start Evaluation
+> print('Evaluation on training set')
+[1] "Evaluation on training set"
+> #Do Micro Averaging
+> overallConfusionMatrix<-confusionMatrices[[1]];
+> for(i in 2:length(confusionMatrices)){
++ 	overallConfusionMatrix<-overallConfusionMatrix+confusionMatrices[[i]];
++ }
+> accuracy<-sum(diag(overallConfusionMatrix))/sum(overallConfusionMatrix);
+> performanceMatrix<-measure_performance(overallConfusionMatrix);
+> print("Result of Micro-Averaging");
+[1] "Result of Micro-Averaging"
+> print(performanceMatrix);
+      TP  FN  FP      Recall  Precision   F-measure
+110  128  66  60 0.659793814 0.68085106 0.670157068
+128  256  69  59 0.787692308 0.81269841 0.800000000
+132    1 198  40 0.005025126 0.02439024 0.008333333
+2   1399  86 216 0.942087542 0.86625387 0.902580645
+21     1 160  44 0.006211180 0.02222222 0.009708738
+30   256  88  64 0.744186047 0.80000000 0.771084337
+37  2569 143  99 0.947271386 0.96289355 0.955018587
+47   281 118 369 0.704260652 0.43230769 0.535748332
+57   150 132  85 0.531914894 0.63829787 0.580270793
+75   329 120 144 0.732739421 0.69556025 0.713665944
+> print(get_overall_performance(performanceMatrix));
+             Recall Precision F-measure
+micro-avg 0.8198473 0.8198473 0.8198473
+macro-avg 0.6061182 0.5935475 0.5946568
+> print(sprintf("Accuracy:%f",accuracy));
+[1] "Accuracy:0.819847"
+> #Do Macro Averaging
+> accuracies<-1:K*0;
+> overallPerformanceMatrix<-measure_performance(confusionMatrices[[1]]);
+> accuracies[1]<-sum(diag(confusionMatrices[[1]]))/sum(confusionMatrices[[1]]);
+> for(i in 2:length(confusionMatrices)){
++ 	performanceMatrix<-measure_performance(confusionMatrices[[i]]);
++ 	overallPerformanceMatrix<-overallPerformanceMatrix+performanceMatrix;
++ 	accuracies[i]<-sum(diag(confusionMatrices[[i]]))/sum(confusionMatrices[[i]]);
++ }
+> overallPerformanceMatrix[,4:6]<-overallPerformanceMatrix[,4:6]/K;
+> print("Result of Macro-Averaing");
+[1] "Result of Macro-Averaing"
+> print(overallPerformanceMatrix);
+      TP  FN  FP      Recall   Precision F-measure
+110  128  66  60 0.659764910 0.679581952 0.6632997
+128  256  69  59 0.785885252 0.809283762 0.7954317
+132    1 198  40 0.005000000 0.016666667       NaN
+2   1399  86 216 0.942421918 0.866185013 0.9024959
+21     1 160  44 0.007692308 0.006666667       NaN
+30   256  88  64 0.742798754 0.799833391 0.7687073
+37  2569 143  99 0.947362463 0.962906965 0.9550441
+47   281 118 369 0.708644289 0.431446796 0.5323149
+57   150 132  85 0.531146973 0.633531320 0.5738306
+75   329 120 144 0.731391773 0.690896427 0.7080081
+> print(get_overall_performance(overallPerformanceMatrix));
+             Recall Precision F-measure
+micro-avg 0.8198473 0.8198473 0.8198473
+macro-avg 0.6062109 0.5896999 0.7373915
+> std_accuracy<-sqrt(var(accuracies));
+> mean_accuracy<-mean(accuracies);
+> print(sprintf("MeanAccuracy=%f",mean_accuracy));
+[1] "MeanAccuracy=0.819847"
+> print(sprintf("99%% ConfidenceInterval[%f,%f]",
++ 	mean_accuracy-2.58*std_accuracy,
++ 	mean_accuracy+2.58*std_accuracy));
+[1] "99% ConfidenceInterval[0.779251,0.860444]"
+> print(sprintf("95%% ConfidenceInterval[%f,%f]",
++ 	mean_accuracy-1.96*std_accuracy,
++ 	mean_accuracy+1.96*std_accuracy));
+[1] "95% ConfidenceInterval[0.789007,0.850688]"
+> print(sprintf("90%% ConfidenceInterval[%f,%f]",
++ 	mean_accuracy-1.64*std_accuracy,
++ 	mean_accuracy+1.64*std_accuracy));
+[1] "90% ConfidenceInterval[0.794042,0.845653]"
+> 
+> #Evaluation on test set
+> print('Evaluation on test set')
+[1] "Evaluation on test set"
+> #Find best model
+> accuracy_rank<-rank(-accuracies);
+> best_model<-models[accuracy_rank==1][[1]];
+> #Classification on test set
+> prediction<-predict(best_model,test_set);
+> #Construct Confusion Matrix
+> confusionMatrix<-table(actual=test_set[,1],predicted=prediction);
+> accuracy<-sum(diag(confusionMatrix))/sum(confusionMatrix);
+> print(confusionMatrix)
+      predicted
+actual 110 128 132   2  21  30  37  47  57  75
+   110  14   0   0  50   1  19   3   0   0   0
+   128  14   1   0  65   2  20   5   0   0   1
+   132  18   0   6  26   5   9   2   0   0   0
+   2     0   0   0 588   0   0  56   0   0   0
+   21    7   0   2  22   6   8   2   1   0   0
+   30    1   0   0 100   0  39  24   0   0   0
+   37    2   0   0  63   1   0 983   0   0   0
+   47   26   0   8  61  11  20   7   1   0   0
+   57    4   1   0  53   8   7  23   0   4   0
+   75    9   0   0  92   4   9  24   0   2   0
+> print(sprintf('Test Set: Accuracy=%f',accuracy))
+[1] "Test Set: Accuracy=0.646457"
+> 
+> proc.time()
+   user  system elapsed 
+446.761   4.879 747.451 
