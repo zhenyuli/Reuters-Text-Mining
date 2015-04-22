@@ -17,6 +17,10 @@ scatter<-function(D){
 
 	return(scat);
 }
+
+# function to measure scatter of a set of data points
+# input	D			list of data points
+# input	clusters	list of clusters that the data points belong to
 measure_scatter<-function(D,clusters){
 	# Tabulate all clusters
 	freq_tab<-table(clusters);
@@ -29,13 +33,18 @@ measure_scatter<-function(D,clusters){
 	tot_B<-0; # Between Cluster Scatter
 	for (i in cluster_labs){
 		Di<-D[clusters == i,];
+		# Check if cluster contain less than 2 records
 		if(!is.matrix(Di)){
 			print(sprintf('Cluster %d has less than 2 records',i));
 			next;
 		}
+		# Find cluster centre
 		center_i<-apply(Di,2,mean);
-		Si<-scatter(Di); # Within Cluster Scatter
-		Bi<-dim(Di)[1] * sum((center_i-center)^2); # Between Cluster Scatter
+		# Find within-cluster scatter
+		Si<-scatter(Di);
+		# Find between-cluster scatter
+		Bi<-dim(Di)[1] * sum((center_i-center)^2);
+		# Sum up scatters
 		tot_S<-tot_S+Si;
 		tot_B<-tot_B+Bi;
 		print(sprintf('Cluster %d Between-Cluster Scatter: %f Within-Cluster Scatter:%f',
@@ -46,6 +55,9 @@ measure_scatter<-function(D,clusters){
 	print(sprintf('Total Within-Cluster Scatter:%f',tot_S));
 }
 
+# function to find majority class label in each cluster
+# input	class		list of class labels for all data points
+# input	cluster		list of cluster assignments for all data points
 majority_vote<-function(class,cluster){
 	# Build frequency table
 	cluster_tab<-table(cluster);

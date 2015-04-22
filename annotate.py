@@ -84,6 +84,7 @@ for line in reader:
 		s = '_'.join(ngram[0])
 		for i in range(0,ngram[1]):
 			doc_features.append(s)
+	# Write to file
 	writer.writerow([' '.join(doc_features)])
 f1.close()
 f2.close()

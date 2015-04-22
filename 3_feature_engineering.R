@@ -2,6 +2,11 @@ library(SnowballC);
 library(tm);
 library(topicmodels);
 
+# function to perform chi-square test on the specified class-term pair
+# input	class			class label for chi2 test
+# input term			term for chi2 test
+# input tags			list of tags for documents
+# input	doc_term_mat	document-term matrix
 chi_test<-function(class,term,tags,doc_term_mat){
 	# Summing Observed Data
 	tab<-table(doc_term_mat[tags == class,term]>0);
@@ -26,6 +31,10 @@ chi_test<-function(class,term,tags,doc_term_mat){
 	chi_square<-sum(diff^2/expected);
 	return(chi_square);
 }
+
+# function to select features using chi-square test
+# input	tags			list of tags for documents
+# input	doc_term_mat	document-term matrix
 select_features<-function(tags,doc_term_mat){
 	class_labels<-as.numeric(names(table(tags)));
 	terms<-1:dim(doc_term_mat)[2];
