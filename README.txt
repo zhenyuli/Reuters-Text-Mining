@@ -1,3 +1,7 @@
+This is a data-mining/text-mining project that is part of the final year data-mining course in the University of Warwick. The project aim is to apply data mining techniques in real applications, and the task is to classify news data into predefined categories with the help of traning data, or to cluster them by measuring distances and similarities.
+
+The code is written in mixed R and python, it is only a choice of existing third-party libraries available on these platforms. The following explains how the code can run on your computer and a copy of the report is also included in the repository.
+
 1. Dependencies
 	The following libraries must be installed in order to run the scripts.
 
